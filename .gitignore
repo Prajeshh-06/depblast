@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Generated visualization
+webapp/templates/graph.html
+
+# Optional: user-specific scan output
+# reports/dependency_analysis.json
