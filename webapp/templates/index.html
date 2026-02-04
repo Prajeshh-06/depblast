@@ -1,13 +1,300 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Supply Chain Dependency Graph</title>
-  </head>
-  <body style="margin: 0">
-    <iframe
-      src="/static/../graph.html"
-      style="width: 100%; height: 100vh; border: none"
-    >
-    </iframe>
-  </body>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supply Chain Risk Analyzer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #22c55e, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 40px;
+    }
+
+    .upload-area {
+      border: 2px dashed #475569;
+      border-radius: 16px;
+      padding: 60px 40px;
+      text-align: center;
+      transition: all 0.3s;
+      cursor: pointer;
+      background: rgba(30, 41, 59, 0.5);
+    }
+
+    .upload-area:hover,
+    .upload-area.dragover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+
+    .upload-text {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+    }
+
+    .upload-hint {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .btn {
+      display: inline-block;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: transform 0.2s;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+    }
+
+    .results {
+      margin-top: 40px;
+      display: none;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: rgba(30, 41, 59, 0.8);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #3b82f6;
+    }
+
+    .stat-label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .risk-list {
+      background: rgba(30, 41, 59, 0.8);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .risk-list h3 {
+      margin-bottom: 15px;
+      color: #f59e0b;
+    }
+
+    .risk-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .risk-item:last-child {
+      border-bottom: none;
+    }
+
+    .risk-score {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+
+    .risk-high {
+      background: #dc2626;
+    }
+
+    .risk-med {
+      background: #f59e0b;
+    }
+
+    .risk-low {
+      background: #22c55e;
+    }
+
+    .view-graph-btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .spinner {
+      border: 3px solid #334155;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .error {
+      color: #ef4444;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🔗 Supply Chain Risk Analyzer</h1>
+    <p class="subtitle">Upload a package-lock.json to visualize dependency risks</p>
+
+    <div class="upload-area" id="uploadArea">
+      <div class="upload-icon">📦</div>
+      <div class="upload-text">Drop your package-lock.json here</div>
+      <div class="upload-hint">or click to browse</div>
+      <input type="file" id="fileInput" accept=".json">
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Analyzing dependencies...</p>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <div class="results" id="results">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalDeps">0</div>
+          <div class="stat-label">Total Dependencies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="directDeps">0</div>
+          <div class="stat-label">Direct Dependencies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="transitiveDeps">0</div>
+          <div class="stat-label">Transitive Dependencies</div>
+        </div>
+      </div>
+
+      <div class="risk-list">
+        <h3>⚠️ Highest Risk Dependencies</h3>
+        <div id="riskItems"></div>
+      </div>
+
+      <a href="/graph" class="btn view-graph-btn">🌐 View Interactive Graph</a>
+    </div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    const errorDiv = document.getElementById('error');
+
+    uploadArea.onclick = () => fileInput.click();
+    uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); };
+    uploadArea.ondragleave = () => uploadArea.classList.remove('dragover');
+    uploadArea.ondrop = (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    };
+    fileInput.onchange = () => { if (fileInput.files.length) handleFile(fileInput.files[0]); };
+
+    async function handleFile(file) {
+      errorDiv.textContent = '';
+      results.style.display = 'none';
+      loading.style.display = 'block';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await res.json();
+        loading.style.display = 'none';
+
+        if (data.error) { errorDiv.textContent = data.error; return; }
+
+        document.getElementById('totalDeps').textContent = data.stats.total;
+        document.getElementById('directDeps').textContent = data.stats.direct;
+        document.getElementById('transitiveDeps').textContent = data.stats.total - data.stats.direct;
+
+        document.getElementById('riskItems').innerHTML = data.top_risks.map(r => `
+                    <div class="risk-item">
+                        <span>${r.name}</span>
+                        <span class="risk-score ${r.risk_score >= 100 ? 'risk-high' : r.risk_score >= 50 ? 'risk-med' : 'risk-low'}">${r.risk_score}</span>
+                    </div>
+                `).join('');
+
+        results.style.display = 'block';
+      } catch (err) {
+        loading.style.display = 'none';
+        errorDiv.textContent = 'Failed to analyze: ' + err.message;
+      }
+    }
+  </script>
+</body>
+
 </html>
