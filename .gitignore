@@ -15,3 +15,5 @@ webapp/templates/graph.html
 
 # Optional: user-specific scan output
 # reports/dependency_analysis.json
+
+reports/dependency_analysis.json
