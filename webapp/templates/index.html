@@ -11,7 +11,7 @@
       padding: 0;
       box-sizing: border-box;
     }
-
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -40,27 +40,32 @@
       margin-bottom: 40px;
     }
 
-    .upload-area {
-      border: 2px dashed #475569;
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      transition: all 0.3s;
-      cursor: pointer;
-      background: rgba(30, 41, 59, 0.5);
-    }
-
-    .upload-area:hover,
-    .upload-area.dragover {
-      border-color: #3b82f6;
-      background: rgba(59, 130, 246, 0.1);
-    }
+      .upload-area {
+        border: 2px dashed #475569;
+        border-radius: 18px;
+        padding: 70px 40px;
+        text-align: center;
+        transition: all 0.25s ease;
+        cursor: pointer;
+        background: linear-gradient(
+          180deg,
+          rgba(30, 41, 59, 0.7),
+          rgba(15, 23, 42, 0.9)
+        );
+      }
+      
+      .upload-area:hover,
+      .upload-area.dragover {
+        border-color: #60a5fa;
+        background: rgba(59, 130, 246, 0.12);
+      }
 
     .upload-icon {
-      font-size: 3rem;
-      margin-bottom: 20px;
+      font-size: 3.2rem;
+      margin-bottom: 16px;
+      opacity: 0.9;
     }
-
+    
     .upload-text {
       font-size: 1.2rem;
       margin-bottom: 10px;
@@ -77,20 +82,20 @@
 
     .btn {
       display: inline-block;
-      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      background: linear-gradient(90deg, #2563eb, #1d4ed8);
       color: white;
       padding: 12px 30px;
-      border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 1rem;
       cursor: pointer;
       margin-top: 20px;
-      transition: transform 0.2s;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
       text-decoration: none;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
     }
-
+    
     .btn:hover {
-      transform: scale(1.05);
+      transform: translateY(-2px);
     }
 
     .results {
@@ -105,13 +110,15 @@
       margin-bottom: 30px;
     }
 
-    .stat-card {
-      background: rgba(30, 41, 59, 0.8);
-      border-radius: 12px;
+    .stat-card,
+    .risk-list {
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 14px;
       padding: 20px;
-      text-align: center;
+      border: 1px solid #334155;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
     }
-
+    
     .stat-value {
       font-size: 2rem;
       font-weight: bold;
@@ -121,12 +128,6 @@
     .stat-label {
       color: #94a3b8;
       font-size: 0.9rem;
-    }
-
-    .risk-list {
-      background: rgba(30, 41, 59, 0.8);
-      border-radius: 12px;
-      padding: 20px;
     }
 
     .risk-list h3 {
@@ -146,24 +147,26 @@
     }
 
     .risk-score {
-      padding: 4px 12px;
-      border-radius: 20px;
+      padding: 4px 14px;
+      border-radius: 999px;
       font-size: 0.85rem;
-      font-weight: bold;
+      font-weight: 600;
+      min-width: 60px;
+      text-align: center;
     }
-
+    
     .risk-high {
-      background: #dc2626;
+      background: #991b1b;
     }
-
+    
     .risk-med {
-      background: #f59e0b;
+      background: #b45309;
     }
-
+    
     .risk-low {
-      background: #22c55e;
+      background: #166534;
     }
-
+    
     .view-graph-btn {
       display: block;
       width: 100%;
@@ -296,5 +299,6 @@
     }
   </script>
 </body>
+
 
 </html>
