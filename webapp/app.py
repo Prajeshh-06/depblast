@@ -1,17 +1,18 @@
 import json
 import sys
+from pathlib import Path
+
 import networkx as nx
 from flask import Flask, render_template, request, jsonify
 from pyvis.network import Network
-from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
-TEMPLATES_DIR = BASE_DIR / "templates"
-GRAPH_FILE = TEMPLATES_DIR / "graph.html"
+ROOT_DIR = BASE_DIR.parent
+TEMPLATE_DIR = BASE_DIR / "templates"
+GRAPH_HTML = TEMPLATE_DIR / "graph.html"
 
-# Add ingestion module to path and import existing functions
-sys.path.insert(0, str(PROJECT_ROOT / "ingestion" / "npm"))
+sys.path.insert(0, str(ROOT_DIR / "ingestion" / "npm"))
+
 from extract_dependencies import (
     extract_dependencies,
     compute_fanout,
@@ -20,36 +21,33 @@ from extract_dependencies import (
 )
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
-# Store current analysis in memory
-current_analysis = {}
-
-
-def risk_color(risk):
-    if risk >= 100:
-        return "#dc2626"  # red
-    elif risk >= 50:
-        return "#f59e0b"  # amber
-    elif risk >= 20:
-        return "#facc15"  # yellow
-    else:
-        return "#22c55e"  # green
+analysis_cache = {}
 
 
-def generate_graph(deps):
-    """Generate graph from dependency data."""
-    G = nx.DiGraph()
+def map_risk_to_color(score):
+    if score >= 100:
+        return "#dc2626"
+    elif score >= 50:
+        return "#f59e0b"
+    elif score >= 20:
+        return "#facc15"
+    return "#22c55e"
 
-    for pkg_id, data in deps.items():
-        G.add_node(
-            pkg_id,
-            depth=data["depth"],
-            fanout=data["fanout"],
-            risk=data["risk_score"]
+
+def build_dependency_graph(dependency_map):
+    graph = nx.DiGraph()
+
+    for pkg, meta in dependency_map.items():
+        graph.add_node(
+            pkg,
+            depth=meta["depth"],
+            fanout=meta["fanout"],
+            risk=meta["risk_score"]
         )
-        for child in data["dependencies"]:
-            G.add_edge(pkg_id, child)
+        for child in meta["dependencies"]:
+            graph.add_edge(pkg, child)
 
     net = Network(
         height="750px",
@@ -58,48 +56,49 @@ def generate_graph(deps):
         font_color="white",
         directed=True
     )
-    net.set_options("""
-var options = {
-  "physics": {
-    "enabled": true,
-    "solver": "forceAtlas2Based",
-    "forceAtlas2Based": {
-      "gravitationalConstant": -100,
-      "centralGravity": 0.005,
-      "springLength": 250,
-      "springConstant": 0.02,
-      "damping": 0.4,
-      "avoidOverlap": 1
-    },
-    "stabilization": {
-      "enabled": true,
-      "iterations": 2000,
-      "updateInterval": 25,
-      "fit": true
-    },
-    "minVelocity": 0.75
-  },
-  "interaction": {
-    "hover": true,
-    "tooltipDelay": 100,
-    "hideEdgesOnDrag": true,
-    "hideEdgesOnZoom": true
-  },
-  "nodes": {
-    "scaling": {
-      "min": 10,
-      "max": 50
-    }
-  }
-}
-""")
 
-    for node, attrs in G.nodes(data=True):
+    net.set_options("""
+    var options = {
+      "physics": {
+        "enabled": true,
+        "solver": "forceAtlas2Based",
+        "forceAtlas2Based": {
+          "gravitationalConstant": -100,
+          "centralGravity": 0.005,
+          "springLength": 250,
+          "springConstant": 0.02,
+          "damping": 0.4,
+          "avoidOverlap": 1
+        },
+        "stabilization": {
+          "enabled": true,
+          "iterations": 2000,
+          "updateInterval": 25,
+          "fit": true
+        },
+        "minVelocity": 0.75
+      },
+      "interaction": {
+        "hover": true,
+        "tooltipDelay": 100,
+        "hideEdgesOnDrag": true,
+        "hideEdgesOnZoom": true
+      },
+      "nodes": {
+        "scaling": {
+          "min": 10,
+          "max": 50
+        }
+      }
+    }
+    """)
+
+    for node, attrs in graph.nodes(data=True):
         net.add_node(
             node,
             label=node,
             size=10 + attrs["fanout"],
-            color=risk_color(attrs["risk"]),
+            color=map_risk_to_color(attrs["risk"]),
             title=(
                 f"Package: {node}<br>"
                 f"Depth: {attrs['depth']}<br>"
@@ -108,106 +107,102 @@ var options = {
             )
         )
 
-    for src, dst in G.edges():
+    for src, dst in graph.edges():
         net.add_edge(src, dst)
 
-    net.save_graph(str(GRAPH_FILE))
+    net.save_graph(str(GRAPH_HTML))
 
 
 @app.route("/")
-def index():
-    """Landing page with file upload."""
+def home():
     return render_template("index.html")
 
 
 @app.route("/analyze", methods=["POST"])
-def analyze():
-    """Handle file upload and run analysis."""
-    global current_analysis
+def analyze_dependencies():
+    global analysis_cache
 
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
-    file = request.files["file"]
-
-    if file.filename == "":
+    uploaded_file = request.files["file"]
+    if uploaded_file.filename == "":
         return jsonify({"error": "No file selected"}), 400
 
     try:
-        content = file.read().decode("utf-8")
-        lock_data = json.loads(content)
+        raw_data = uploaded_file.read().decode("utf-8")
+        lock_json = json.loads(raw_data)
 
-        if "packages" not in lock_data:
+        if "packages" not in lock_json:
             return jsonify({"error": "Invalid package-lock.json"}), 400
 
-        # Save temporarily for extract_dependencies to use
-        import extract_dependencies as ext_mod
-        temp_path = PROJECT_ROOT / "temp_lock.json"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(lock_data, f)
+        import extract_dependencies as extractor
+        temp_lock = ROOT_DIR / "temp_lock.json"
 
-        # Temporarily change LOCK_FILE and run existing functions
-        original_lock = ext_mod.LOCK_FILE
-        ext_mod.LOCK_FILE = temp_path
+        with open(temp_lock, "w", encoding="utf-8") as f:
+            json.dump(lock_json, f)
+
+        original_lock_file = extractor.LOCK_FILE
+        extractor.LOCK_FILE = temp_lock
 
         deps = extract_dependencies()
         compute_fanout(deps)
         compute_risk_scores(deps)
 
-        ext_mod.LOCK_FILE = original_lock
-        temp_path.unlink()
+        extractor.LOCK_FILE = original_lock_file
+        temp_lock.unlink()
 
-        current_analysis = deps
+        analysis_cache = deps
 
-        # Generate graph
-        generate_graph(deps)
+        build_dependency_graph(deps)
 
-        # Stats
-        total_deps = len(deps)
-        direct_deps = sum(1 for d in deps.values() if d["direct"])
+        total_count = len(deps)
+        direct_count = sum(1 for d in deps.values() if d["direct"])
 
-        sorted_by_risk = sorted(deps.items(), key=lambda x: x[1]["risk_score"], reverse=True)[:10]
-        top_risks = [
-            {"name": pkg_id, "risk_score": round(data["risk_score"], 1)}
-            for pkg_id, data in sorted_by_risk
-        ]
+        top_risk = sorted(
+            deps.items(),
+            key=lambda x: x[1]["risk_score"],
+            reverse=True
+        )[:10]
 
         return jsonify({
             "success": True,
-            "stats": {"total": total_deps, "direct": direct_deps},
-            "top_risks": top_risks
+            "stats": {
+                "total": total_count,
+                "direct": direct_count
+            },
+            "top_risks": [
+                {"name": pkg, "risk_score": round(meta["risk_score"], 1)}
+                for pkg, meta in top_risk
+            ]
         })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception as err:
+        return jsonify({"error": str(err)}), 500
 
 
 @app.route("/graph")
-def graph():
-    """Display the generated graph."""
+def show_graph():
     return render_template("graph.html")
 
 
 @app.route("/simulate", methods=["POST"])
-def simulate_route():
-    """Simulate package compromise using existing function."""
-    global current_analysis
+def simulate_attack():
+    if not analysis_cache:
+        return jsonify({"error": "No analysis data available"}), 400
 
-    data = request.get_json()
-    target_pkg = data.get("package")
+    payload = request.get_json()
+    target = payload.get("package")
 
-    if not current_analysis:
-        return jsonify({"error": "No analysis data. Upload a file first."}), 400
+    if target not in analysis_cache:
+        return jsonify({"error": f"Package '{target}' not found"}), 404
 
-    if target_pkg not in current_analysis:
-        return jsonify({"error": f"Package '{target_pkg}' not found"}), 404
-
-    impacted = simulate_compromise(target_pkg, current_analysis)
+    affected = simulate_compromise(target, analysis_cache)
 
     return jsonify({
-        "target": target_pkg,
-        "impacted_count": len(impacted),
-        "impacted_packages": list(impacted)[:20]
+        "target": target,
+        "impacted_count": len(affected),
+        "impacted_packages": list(affected)[:20]
     })
 
 
