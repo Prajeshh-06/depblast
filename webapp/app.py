@@ -82,7 +82,11 @@ def build_dependency_graph(dependency_map):
         "hover": true,
         "tooltipDelay": 100,
         "hideEdgesOnDrag": true,
-        "hideEdgesOnZoom": true
+        "hideEdgesOnZoom": false,
+        "zoomView": true,
+        "zoomSpeed": 1.1,
+        "navigationButtons": false,
+        "keyboard": false
       },
       "nodes": {
         "scaling": {
@@ -111,6 +115,206 @@ def build_dependency_graph(dependency_map):
         net.add_edge(src, dst)
 
     net.save_graph(str(GRAPH_HTML))
+
+    # Inject professional loading screen over pyvis defaults
+    html = GRAPH_HTML.read_text(encoding="utf-8")
+
+    custom_styles = """
+    <style>
+    html, body {
+        margin: 0; padding: 0;
+        overflow: hidden !important;
+        height: 100%; width: 100%;
+        background: #0f172a;
+    }
+    .card, .card-body {
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+    }
+    #mynetwork {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background-color: #0f172a !important;
+        border: none !important;
+        touch-action: auto !important;
+    }
+
+    #loadingBar {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: #0f172a !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9999;
+        transition: opacity 0.6s ease !important;
+    }
+
+    div.outerBorder {
+        position: relative !important;
+        top: auto !important;
+        width: 420px !important;
+        height: auto !important;
+        background: rgba(15, 23, 42, 0.95) !important;
+        border: 1px solid #1e3a5f !important;
+        border-radius: 18px !important;
+        box-shadow: 0 0 60px rgba(59, 130, 246, 0.15), 0 25px 50px rgba(0,0,0,0.5) !important;
+        padding: 36px 32px 32px !important;
+        overflow: hidden;
+        filter: none !important;
+    }
+
+    div.outerBorder::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #3b82f6, #22c55e, transparent);
+        animation: scanline 2s ease-in-out infinite;
+    }
+
+    @keyframes scanline {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    .loading-inner-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+
+    .circle-loader {
+        width: 44px; height: 44px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        border: 3px solid rgba(59,130,246,0.2);
+        border-top-color: #3b82f6;
+        border-right-color: #22c55e;
+        animation: circle-spin 0.9s linear infinite;
+    }
+    @keyframes circle-spin { 100% { transform: rotate(360deg); } }
+
+    .loading-title-wrap { flex: 1; }
+    .loading-main-title {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin: 0 0 4px;
+    }
+    .loading-subtitle {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.75rem;
+        color: #3b82f6;
+        margin: 0;
+    }
+
+    #border {
+        position: relative !important;
+        top: auto !important; left: auto !important;
+        width: 100% !important;
+        height: 6px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: rgba(30, 41, 59, 0.8) !important;
+        box-shadow: none !important;
+        overflow: hidden;
+        margin-top: 0 !important;
+    }
+
+    #bar {
+        position: absolute !important;
+        top: 0 !important; left: 0 !important;
+        height: 100% !important;
+        border-radius: 999px !important;
+        border: none !important;
+        background: linear-gradient(90deg, #2563eb, #22c55e) !important;
+        box-shadow: 0 0 10px rgba(59,130,246,0.6) !important;
+        transition: width 0.3s ease !important;
+        min-width: 4px !important;
+    }
+
+    #text {
+        position: relative !important;
+        top: auto !important; left: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        font-family: 'SF Mono', 'Fira Code', monospace !important;
+        font-size: 0.72rem !important;
+        color: #3b82f6 !important;
+        text-align: right;
+        margin: 8px 0 0 !important;
+        font-weight: 600;
+    }
+
+    .progress-label {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 0.72rem;
+        color: #475569;
+        margin: 8px 0 0;
+    }
+    </style>
+    """
+
+    custom_html_injection = """
+    <script>
+    // Replace the default outerBorder content with styled version
+    document.addEventListener('DOMContentLoaded', function() {
+        var outer = document.querySelector('div.outerBorder');
+        if (!outer) return;
+
+        var header = document.createElement('div');
+        header.className = 'loading-inner-header';
+        header.innerHTML = `
+            <div class="circle-loader"></div>
+            <div class="loading-title-wrap">
+                <p class="loading-main-title">Building Graph</p>
+                <p class="loading-subtitle" id="physicsStatus">Simulating physics...</p>
+            </div>
+        `;
+        outer.insertBefore(header, outer.firstChild);
+
+        var label = document.createElement('div');
+        label.className = 'progress-label';
+        label.textContent = 'Stabilizing node positions';
+        outer.appendChild(label);
+
+    });
+
+    // Prevent page scroll.
+    document.body.style.overflow = 'hidden';
+
+    // The #loadingBar overlay (z-index:9999) blocks all mouse events including
+    // wheel-to-zoom. As soon as stabilization finishes, disable pointer-events
+    // on it so the canvas underneath can receive wheel events immediately,
+    // even during the 500ms fade-out transition.
+    document.addEventListener('DOMContentLoaded', function() {
+        var checkNetwork = setInterval(function() {
+            if (typeof network !== 'undefined') {
+                clearInterval(checkNetwork);
+                network.once('stabilizationIterationsDone', function() {
+                    var bar = document.getElementById('loadingBar');
+                    if (bar) { bar.style.pointerEvents = 'none'; }
+                });
+            }
+        }, 100);
+    });
+    </script>
+    """
+
+    html = html.replace("</style>", custom_styles + "</style>", 1)
+    html = html.replace("</body>", custom_html_injection + "</body>")
+    GRAPH_HTML.write_text(html, encoding="utf-8")
 
 
 @app.route("/")
